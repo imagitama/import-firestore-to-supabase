@@ -1,0 +1,26 @@
+{
+  "name": "export-to-supabase",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "create-schema": "node src/create-schema.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^10.0.0",
+    "firebase-admin": "^8.12.1",
+    "pg": "^8.7.1",
+    "pg-format": "^1.0.4",
+    "prompt": "^1.0.0",
+    "yargs": "^15.3.1"
+  },
+  "devDependencies": {
+    "prettier": "^2.0.5"
+  },
+  "engines": {
+    "node": ">=10"
+  }
+}

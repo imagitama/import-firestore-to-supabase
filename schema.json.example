@@ -1,0 +1,18 @@
+{
+    "users": [
+        {
+            "source": "username",
+            "colType": "TEXT"
+        },
+        {
+            "source": "profile",
+            "fieldType": ["REF", "profiles"]
+        }
+    ],
+    "profiles": [
+        {
+            "source": "bio",
+            "colType": "TEXT"
+        }
+    ]
+}

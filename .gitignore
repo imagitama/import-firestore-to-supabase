@@ -1,0 +1,5 @@
+key.json
+node_modules
+.env
+get-schema
+schema.json
