@@ -47,7 +47,7 @@ If your schema has fields that do not exist in the Firestore document then a def
 
 The order of collection names does not matter. The order of fields will determine column order.
 
-Set the field type to `['REF', 'my-collection-name']` to indicate the field is a reference to another collection. A (unconstrainted) foreign key will be created for the column (after all tables are created).
+Set the field type to `['REF', 'my-collection-name']` to indicate the field is a reference to another collection. The field value will be a `TEXT` string that is the ID of the referenced document ID (in future this will automatically be a foreign key).
 
 ### Limitations
 
@@ -110,14 +110,8 @@ Then install deps:
 Then run the script:
 
     npm start
-
-By default it does a "dry run" to give you a chance to review your schema/queries. Disable it like so:
-
-    npm start -- --go
-
-Enable output of useful things for debugging:
-
-    npm start -- --debug
+    
+Note that by default it does not write to Supabase (but will read your Firestore collections).
 
 ### CLI options
 
