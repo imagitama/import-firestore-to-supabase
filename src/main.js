@@ -53,6 +53,10 @@ function getSchemas() {
   return schemas
 }
 
+const specialFieldTypes = {
+  ANY: 'ANY',
+}
+
 async function connectToPostgres() {
   postgresClient = new Client(process.env.POSTGRESQL_CONNECTION_URL)
   await postgresClient.connect()
@@ -78,7 +82,14 @@ const escape = (str) => pgFormat.literal(str)
 
 const getFirestoreFieldNamesForTable = (tableName) => {
   const schema = getSchemaForCollection(tableName)
-  return schema.map((fieldDef) => fieldDef.source)
+
+  const fieldNames = []
+
+  for (const fieldDef of schema) {
+    fieldNames.push(fieldDef.source)
+  }
+
+  return fieldNames
 }
 
 const isFirebaseDate = (val) =>
@@ -118,9 +129,45 @@ const recursivelyReplaceFirestoreRefs = (thing) => {
   return thing
 }
 
+const doesFieldDefinitionContainReferenceToAny = (fieldDef) =>
+  fieldDef.fieldType &&
+  Array.isArray(fieldDef.fieldType) &&
+  fieldDef.fieldType[1] === specialFieldTypes.ANY
+
+const addAnyColsToSchema = (schema) => {
+  let newSchema = []
+
+  for (const item of schema) {
+    if (doesFieldDefinitionContainReferenceToAny(item)) {
+      newSchema.push({
+        ...item,
+        source: `${item.source}Table`,
+        isTableFor: item.source,
+      })
+    }
+    newSchema.push(item)
+  }
+
+  return newSchema
+}
+
 const mapFieldToInsertStatement = (tableName, fieldName, fieldValue) => {
   const schema = getSchemaForCollection(tableName)
+
   const fieldDef = schema.find((item) => item.source === fieldName)
+
+  if (!fieldDef) {
+    throw new Error(`Could not find field definition by name "${fieldName}"`)
+  }
+
+  // if a special column
+  if (fieldDef.isTableFor) {
+    if (fieldValue) {
+      return `'${fieldValue.parent.id}'`
+    } else {
+      return `''`
+    }
+  }
 
   if (Array.isArray(fieldDef.colType)) {
     const fieldItems = Array.isArray(fieldValue) ? fieldValue : []
@@ -200,8 +247,10 @@ const mapFieldToInsertStatement = (tableName, fieldName, fieldValue) => {
 
 const getSchemaForCollection = (collectionName) => {
   const schemas = getSchemas()
-  if (schemas[collectionName]) {
-    return schemas[collectionName]
+  const matchedSchema = schemas[collectionName]
+  if (matchedSchema) {
+    const schemaWithAnyCols = addAnyColsToSchema(matchedSchema)
+    return schemaWithAnyCols
   }
   throw new Error(
     `Cannot get schema for collection "${collectionName}" - not defined!`
@@ -265,6 +314,11 @@ const getPostgresFieldInfoFromSchemaField = (fieldDef) => {
   return fieldInfo
 }
 
+const specialValues = {
+  // do not insert records only create the table
+  CREATE_ONLY: 'create_only',
+}
+
 async function createTableIfNoExist(tableName) {
   const schema = getSchemaForCollection(tableName)
 
@@ -274,6 +328,7 @@ async function createTableIfNoExist(tableName) {
   const query = `CREATE TABLE IF NOT EXISTS ${tableName} (
     id TEXT PRIMARY KEY,
     ${schema
+      .filter((fieldDef) => fieldDef !== specialValues.CREATE_ONLY)
       .map((fieldDef) => getPostgresFieldInfoFromSchemaField(fieldDef))
       .join(',\n')}
   )`
@@ -286,6 +341,8 @@ async function createTableIfNoExist(tableName) {
 async function insertFirebaseDocsIntoTable(collectionName, docs) {
   // TODO: Let user map collection name to a new table name?
   const tableName = collectionName
+
+  const schema = getSchemaForCollection(tableName)
 
   if (isDebug)
     console.debug(`Inserting ${docs.length} into table "${tableName}"...`)
@@ -307,10 +364,10 @@ async function insertFirebaseDocsIntoTable(collectionName, docs) {
   ${docs
     .map((doc, idx) => {
       const valuesStr = `('${doc.id}', 
-        ${getFirestoreFieldNamesForTable(tableName)
-          .map((fieldName) => {
-            const fieldValue = doc.get(fieldName)
-            return mapFieldToInsertStatement(tableName, fieldName, fieldValue)
+        ${schema
+          .map((item) => {
+            const fieldValue = doc.get(item.isTableFor || item.source)
+            return mapFieldToInsertStatement(tableName, item.source, fieldValue)
           })
           .join(', ')})`
 
@@ -348,11 +405,15 @@ async function migrateCollectionToSupabase(collectionName) {
 
   await createTableIfNoExist(collectionName)
 
-  const docs = await getDocsInCollection(collectionName)
+  const schema = getSchemaForCollection(collectionName)
 
-  console.info(`Found ${docs.length} docs in collection`)
+  if (schema[0] !== specialValues.CREATE_ONLY) {
+    const docs = await getDocsInCollection(collectionName)
 
-  await insertFirebaseDocsIntoTable(collectionName, docs)
+    console.info(`Found ${docs.length} docs in collection`)
+
+    await insertFirebaseDocsIntoTable(collectionName, docs)
+  }
 
   console.info(`Collection has been migrated successfully`)
 }

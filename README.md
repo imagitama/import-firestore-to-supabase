@@ -57,6 +57,14 @@ Does not support nested documents. Move them to a root level collection.
 
 Arrays of objects will be stringified. If those objects contain Firestore references they will be replaced with a string like `$collectionName:$id`
 
+### Per-collection configuration
+
+Set the first field in your collection schema to one of these values to change the result:
+
+| Value         | Purpose                                                                 |
+| ------------- | ----------------------------------------------------------------------- |
+| `create_only` | Do not insert any records. Useful if you just need to create the table. |
+
 ### Example
 
 In this example a foreign key will be created between a "user" and their "profile" because the field type is set to `REF`:
